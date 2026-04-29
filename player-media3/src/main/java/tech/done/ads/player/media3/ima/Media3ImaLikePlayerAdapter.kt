@@ -39,6 +39,7 @@ internal class Media3ImaLikePlayerAdapter(
     private val scope: CoroutineScope,
     private val contentUi: ContentUi? = null,
     private val contentPlaybackController: Media3AdsLoader.ContentPlaybackController? = null,
+    private val contentPlaybackBridge: Media3AdsLoader.ContentPlaybackBridge? = null,
     private val pollIntervalMs: Long = 250L,
     private val uiConfig: AdSdkUiConfig? = null,
     private val showBuiltInAdOverlay: Boolean = true,
@@ -79,6 +80,8 @@ internal class Media3ImaLikePlayerAdapter(
 
     private var pollJob: Job? = null
     private var restoreContentUseController: Boolean = true
+    private var contentEndedFired: Boolean = false
+    private val contentEndedEpsilonMs: Long = 750L
 
     private var savedContentItem: MediaItem? = null
     private var savedContentPositionMs: Long = 0L
@@ -103,7 +106,8 @@ internal class Media3ImaLikePlayerAdapter(
             if (_state.value.isInAd) {
                 adPlayer.pause()
             } else {
-                contentPlayer?.pause() ?: contentPlaybackController?.onPauseRequested()
+                contentPlayer?.pause()
+                    ?: (contentPlaybackBridge?.onPauseRequested() ?: contentPlaybackController?.onPauseRequested())
             }
         }
 
@@ -111,7 +115,8 @@ internal class Media3ImaLikePlayerAdapter(
             if (_state.value.isInAd) {
                 adPlayer.play()
             } else {
-                contentPlayer?.play() ?: contentPlaybackController?.onPlayRequested()
+                contentPlayer?.play()
+                    ?: (contentPlaybackBridge?.onPlayRequested() ?: contentPlaybackController?.onPlayRequested())
             }
         }
     }
@@ -190,6 +195,11 @@ internal class Media3ImaLikePlayerAdapter(
     }
 
     private fun suppressContentController(inAd: Boolean) {
+        // Preferred: hide controller via host bridge, without needing host PlayerView.
+        // UX requirement: after an ad-driven resume, keep controller hidden until host decides otherwise.
+        contentPlaybackBridge?.setContentControllerVisible(false)
+
+        // Fallback (legacy): if bridge isn't provided, try to hide via the (optional) PlayerView we were given.
         val pv = contentPlayerView ?: return
         if (inAd) {
             restoreContentUseController = pv.useController
@@ -198,9 +208,11 @@ internal class Media3ImaLikePlayerAdapter(
             pv.setControllerAutoShow(false)
             pv.setControllerHideOnTouch(false)
         } else {
-            pv.useController = restoreContentUseController
-            pv.setControllerAutoShow(true)
-            pv.setControllerHideOnTouch(true)
+            // Keep hidden; don't restore auto show after an ad.
+            pv.useController = false
+            pv.hideController()
+            pv.setControllerAutoShow(false)
+            pv.setControllerHideOnTouch(false)
         }
     }
 
@@ -232,6 +244,7 @@ internal class Media3ImaLikePlayerAdapter(
         ensureAdViewsAdded()
         adPlayer.setVideoSurfaceView(adSurfaceView)
         suppressContentController(inAd = true)
+        contentEndedFired = false
 
         if (!_state.value.isInAd) {
             savedContentItem = contentPlayer?.currentMediaItem
@@ -243,7 +256,11 @@ internal class Media3ImaLikePlayerAdapter(
             contentPlayer.playWhenReady = false
             contentPlayer.pause()
         } else {
-            contentPlaybackController?.onPauseContentRequested()
+            if (contentPlaybackBridge != null) {
+                contentPlaybackBridge.onPauseContentRequested()
+            } else {
+                contentPlaybackController?.onPauseContentRequested()
+            }
         }
 
         contentUi?.onAdStarted()
@@ -298,6 +315,7 @@ internal class Media3ImaLikePlayerAdapter(
 
     private fun endAdAndResumeContent() {
         if (!_state.value.isInAd) return
+        contentEndedFired = false
 
         simidHandshakeJob?.cancel()
         simidHandshakeJob = null
@@ -333,7 +351,11 @@ internal class Media3ImaLikePlayerAdapter(
                 contentPlayer.playWhenReady = savedContentPlayWhenReady
             }
         } else {
-            contentPlaybackController?.onResumeContentRequested()
+            if (contentPlaybackBridge != null) {
+                contentPlaybackBridge.onResumeContentRequested()
+            } else {
+                contentPlaybackController?.onResumeContentRequested()
+            }
         }
 
         _state.value = _state.value.copy(
@@ -375,9 +397,20 @@ internal class Media3ImaLikePlayerAdapter(
                     }
                     listeners.forEach { it.onAdProgress(pos, dur) }
                 } else {
-                    val pos = contentPlayer?.currentPosition ?: _state.value.contentPositionMs
-                    val dur = contentPlayer?.duration?.takeIf { it > 0 } ?: _state.value.contentDurationMs
+                    val pos = contentPlayer?.currentPosition
+                        ?: contentPlaybackBridge?.getContentPositionMs()
+                        ?: _state.value.contentPositionMs
+                    val dur = contentPlayer?.duration?.takeIf { it > 0 }
+                        ?: contentPlaybackBridge?.getContentDurationMs()
+                        ?: _state.value.contentDurationMs
                     _state.value = _state.value.copy(contentPositionMs = pos, contentDurationMs = dur)
+
+                    // If content player isn't provided (external host via bridge), infer end for postroll sequencing.
+                    if (!contentEndedFired && dur != null && dur > 0L && pos >= dur - contentEndedEpsilonMs) {
+                        contentEndedFired = true
+                        listeners.forEach { it.onContentEnded() }
+                    }
+
                     if (showBuiltInAdOverlay) {
                         adOverlayView.render(
                             inAd = false,

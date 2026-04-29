@@ -77,6 +77,26 @@ class Media3AdsLoader private constructor(
         fun onPlayRequested() {}
     }
 
+    /**
+     * Bridge used by the SDK to interact with the host content player without passing the host's PlayerView.
+     * It provides content timing (position/duration) and the actions to pause/resume content,
+     * plus a way to hide/show the host's content controller.
+     */
+    interface ContentPlaybackBridge {
+        fun onPauseContentRequested()
+        fun onResumeContentRequested()
+        fun onPauseRequested() {}
+        fun onPlayRequested() {}
+
+        fun getContentPositionMs(): Long
+        fun getContentDurationMs(): Long?
+
+        /**
+         * Called by the SDK to control host's content controller visibility.
+         */
+        fun setContentControllerVisible(visible: Boolean)
+    }
+
     interface AdPlaybackListener {
         fun onAdStarted()
         fun onAdEnded()
@@ -89,6 +109,7 @@ class Media3AdsLoader private constructor(
     private var adDisplayContainer: AdDisplayContainerView? = null
     private var contentUi: ContentUi? = null
     private var contentPlaybackController: ContentPlaybackController? = null
+    private var contentPlaybackBridge: ContentPlaybackBridge? = null
     private var adMarkersContainerView: View? = null
     private var videoSurfaceView: View? = null
 
@@ -126,22 +147,32 @@ class Media3AdsLoader private constructor(
     }
 
     fun setPlayer(player: ExoPlayer?) {
+        if (contentPlayer === player) return
         contentPlayer = player
         rebuildIfReady()
     }
 
     fun setAdDisplayContainer(container: AdDisplayContainerView?) {
+        if (adDisplayContainer === container) return
         adDisplayContainer = container
         rebuildIfReady()
     }
 
     fun setContentUi(contentUi: ContentUi?) {
+        if (this.contentUi === contentUi) return
         this.contentUi = contentUi
         rebuildIfReady()
     }
 
     fun setContentPlaybackController(controller: ContentPlaybackController?) {
+        if (contentPlaybackController === controller) return
         this.contentPlaybackController = controller
+        rebuildIfReady()
+    }
+
+    fun setContentPlaybackBridge(bridge: ContentPlaybackBridge?) {
+        if (contentPlaybackBridge === bridge) return
+        contentPlaybackBridge = bridge
         rebuildIfReady()
     }
 
@@ -258,6 +289,7 @@ class Media3AdsLoader private constructor(
                 }
             },
             contentPlaybackController = contentPlaybackController,
+            contentPlaybackBridge = contentPlaybackBridge,
             uiConfig = uiConfig,
             showBuiltInAdOverlay = showBuiltInAdOverlay,
         )

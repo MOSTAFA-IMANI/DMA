@@ -33,7 +33,7 @@ class ExternalPlayerActivity : ComponentActivity() {
         player = ExoPlayer.Builder(this).build().apply {
             setMediaItem(MediaItem.fromUri(SampleConfig.Urls.CONTENT_VIDEO))
             prepare()
-//            seekTo(TEST_START_POSITION_MS)
+            seekTo(TEST_START_POSITION_MS)
             playWhenReady = true
         }
 
@@ -43,15 +43,14 @@ class ExternalPlayerActivity : ComponentActivity() {
             .build()
             .also {
                 it.addAdSdkEventListener(SampleAdsEventLogger())
-                it.setContentPlaybackController(
-                    object : Media3AdsLoader.ContentPlaybackController {
+                it.setContentPlaybackBridge(
+                    object : Media3AdsLoader.ContentPlaybackBridge {
                         override fun onPauseContentRequested() {
                             player.pause()
                         }
 
                         override fun onResumeContentRequested() {
                             player.play()
-                            playerView?.hideController()
                         }
 
                         override fun onPauseRequested() {
@@ -61,17 +60,15 @@ class ExternalPlayerActivity : ComponentActivity() {
                         override fun onPlayRequested() {
                             player.play()
                         }
-                    },
-                )
-                it.setContentUi(
-                    object : Media3AdsLoader.ContentUi {
-                        override fun onAdStarted() {
-                            // Host can update any ad-specific UI state here.
-                        }
 
-                        override fun onAdEnded() {
-                            // Keep player controller hidden after ad-driven resume.
-                            playerView?.hideController()
+                        override fun getContentPositionMs(): Long = player.currentPosition
+                        override fun getContentDurationMs(): Long? = player.duration.takeIf { it > 0 }
+
+                        override fun setContentControllerVisible(visible: Boolean) {
+                            // UX rule: during ads controller must remain hidden.
+                            playerView?.apply {
+                                if (visible) showController() else hideController()
+                            }
                         }
                     },
                 )
@@ -96,7 +93,6 @@ class ExternalPlayerActivity : ComponentActivity() {
                                 PlayerView(ctx).apply {
                                     playerView = this
                                     this.player = this@ExternalPlayerActivity.player
-                                    adsLoader?.setAdMarkersContainerView(this)
                                 }
                             },
                         )
