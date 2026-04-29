@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.annotation.SuppressLint
 import android.os.Looper
+import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
 import androidx.media3.common.MediaItem
@@ -59,19 +60,7 @@ internal class Media3ImaLikePlayerAdapter(
         .setLooper(Looper.getMainLooper())
         .build()
 
-    private val adPlayerView: PlayerView = PlayerView(adDisplayContainer.context).apply {
-        player = adPlayer
-        useController = false
-        setControllerAutoShow(false)
-        setControllerHideOnTouch(false)
-        hideController()
-        // Make built-in controller visually empty in case Android/Media3 forces it visible.
-        findViewById<View>(androidx.media3.ui.R.id.exo_controller)?.apply {
-            alpha = 0f
-            isClickable = false
-            isFocusable = false
-            isEnabled = false
-        }
+    private val adSurfaceView: SurfaceView = SurfaceView(adDisplayContainer.context).apply {
         visibility = View.GONE
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -200,19 +189,6 @@ internal class Media3ImaLikePlayerAdapter(
         startPolling()
     }
 
-    private fun suppressAdController() {
-        adPlayerView.useController = false
-        adPlayerView.setControllerAutoShow(false)
-        adPlayerView.setControllerHideOnTouch(false)
-        adPlayerView.hideController()
-        adPlayerView.findViewById<View>(androidx.media3.ui.R.id.exo_controller)?.apply {
-            alpha = 0f
-            isClickable = false
-            isFocusable = false
-            isEnabled = false
-        }
-    }
-
     private fun suppressContentController(inAd: Boolean) {
         val pv = contentPlayerView ?: return
         if (inAd) {
@@ -235,15 +211,15 @@ internal class Media3ImaLikePlayerAdapter(
         runCatching { adPlayer.removeListener(adListener) }
         runCatching { adDisplayContainer.setSimidEventListener(null) }
         runCatching { adDisplayContainer.hideSimidCreative() }
-        runCatching { (adPlayerView.parent as? ViewGroup)?.removeView(adPlayerView) }
+        runCatching { (adSurfaceView.parent as? ViewGroup)?.removeView(adSurfaceView) }
         runCatching { (adOverlayView.parent as? ViewGroup)?.removeView(adOverlayView) }
         runCatching { adPlayer.release() }
     }
 
     private fun ensureAdViewsAdded() {
-        if (adPlayerView.parent != adDisplayContainer) {
-            (adPlayerView.parent as? ViewGroup)?.removeView(adPlayerView)
-            adDisplayContainer.addView(adPlayerView)
+        if (adSurfaceView.parent != adDisplayContainer) {
+            (adSurfaceView.parent as? ViewGroup)?.removeView(adSurfaceView)
+            adDisplayContainer.addView(adSurfaceView)
         }
 
         if (showBuiltInAdOverlay && adOverlayView.parent != adDisplayContainer) {
@@ -254,10 +230,7 @@ internal class Media3ImaLikePlayerAdapter(
 
     private fun startAd(mediaUri: String, adSkipOffsetMs: Long?, simidInteractiveCreativeUrl: String?) {
         ensureAdViewsAdded()
-        if (adPlayerView.player !== adPlayer) {
-            adPlayerView.player = adPlayer
-        }
-        suppressAdController()
+        adPlayer.setVideoSurfaceView(adSurfaceView)
         suppressContentController(inAd = true)
 
         if (!_state.value.isInAd) {
@@ -276,7 +249,7 @@ internal class Media3ImaLikePlayerAdapter(
         contentUi?.onAdStarted()
         adDisplayContainer.setAdLoadingVisible(true)
 
-        adPlayerView.visibility = View.VISIBLE
+        adSurfaceView.visibility = View.VISIBLE
         if (showBuiltInAdOverlay) {
             adOverlayView.setVisible(true)
         }
@@ -340,9 +313,8 @@ internal class Media3ImaLikePlayerAdapter(
         adPlayer.playWhenReady = false
         adPlayer.stop()
         adPlayer.clearMediaItems()
-        runCatching { adPlayerView.player = null }
         runCatching { adPlayer.clearVideoSurface() }
-        adPlayerView.visibility = View.GONE
+        adSurfaceView.visibility = View.GONE
         suppressContentController(inAd = false)
         if (showBuiltInAdOverlay) {
             adOverlayView.setVisible(false)
@@ -379,7 +351,6 @@ internal class Media3ImaLikePlayerAdapter(
             while (true) {
                 val inAd = _state.value.isInAd
                 if (inAd) {
-                    suppressAdController()
                     val pos = adPlayer.currentPosition
                     val dur = adPlayer.duration.takeIf { it > 0 }
                     _state.value = _state.value.copy(adPositionMs = pos, adDurationMs = dur)
