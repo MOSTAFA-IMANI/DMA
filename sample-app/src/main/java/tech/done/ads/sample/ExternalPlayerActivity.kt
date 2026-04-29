@@ -33,7 +33,7 @@ class ExternalPlayerActivity : ComponentActivity() {
         player = ExoPlayer.Builder(this).build().apply {
             setMediaItem(MediaItem.fromUri(SampleConfig.Urls.CONTENT_VIDEO))
             prepare()
-            seekTo(TEST_START_POSITION_MS)
+//            seekTo(TEST_START_POSITION_MS)
             playWhenReady = true
         }
 

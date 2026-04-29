@@ -1,5 +1,6 @@
 package tech.done.ads.player.media3.ima.internal
 
+import android.content.res.ColorStateList
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -82,6 +83,19 @@ internal class AdOverlayView @JvmOverloads constructor(
 
     private val skipButton = Button(context).apply {
         text = context.getString(R.string.adsdk_skip)
+        setTextColor(
+            ColorStateList(
+                arrayOf(
+                    intArrayOf(android.R.attr.state_enabled),
+                    intArrayOf()
+                ),
+                intArrayOf(
+                    Color.WHITE,
+                    0x99FFFFFF.toInt()
+                )
+            )
+        )
+        setShadowLayer(4f, 0f, 0f, Color.BLACK)
         isAllCaps = false
         visibility = INVISIBLE
         minHeight = dp(36)
@@ -163,6 +177,7 @@ internal class AdOverlayView @JvmOverloads constructor(
         }
 
         val canSkip = skipOffsetMs != null && adPositionMs >= skipOffsetMs
+        val isSkippableAd = skipOffsetMs != null
         if (skipOffsetMs == null) {
             skipButton.visibility = INVISIBLE
             skipInText.visibility = INVISIBLE
@@ -200,12 +215,18 @@ internal class AdOverlayView @JvmOverloads constructor(
             ceil(((dur - adPositionMs).coerceAtLeast(0L)) / 1000.0).toInt()
         }
 
+        // Standard skippable UX (similar to IMA): while skip countdown is shown,
+        // avoid rendering a second timer label ("ad remaining ...") to prevent duplicate timers.
         remainingText.text =
-            remainingSec?.let {
-                context.getString(
-                    R.string.adsdk_ad_remaining_seconds,
-                    it,
-                )
-            }.orEmpty()
+            if (isSkippableAd) {
+                ""
+            } else {
+                remainingSec?.let {
+                    context.getString(
+                        R.string.adsdk_ad_remaining_seconds,
+                        it,
+                    )
+                }.orEmpty()
+            }
     }
 }
