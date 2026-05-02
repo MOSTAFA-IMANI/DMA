@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -98,6 +99,8 @@ internal class AdOverlayView @JvmOverloads constructor(
         visibility = INVISIBLE
         minWidth = dp(68)
         minHeight = dp(40)
+        maxLines = 1
+        ellipsize = TextUtils.TruncateAt.END
         setPadding(dp(16), dp(10), dp(16), dp(10))
         background = createRoundedPill(fillColor = 0x99000000.toInt(), cornerRadiusDp = 40)
     }
@@ -122,8 +125,10 @@ internal class AdOverlayView @JvmOverloads constructor(
         )
         isAllCaps = false
         visibility = GONE
-        minWidth = dp(109)
+        minWidth = dp(72)
         minHeight = dp(40)
+        maxLines = 1
+        ellipsize = TextUtils.TruncateAt.END
         isFocusable = true
         isFocusableInTouchMode = true
         setPadding(dp(16), dp(10), dp(16), dp(10))
@@ -147,7 +152,10 @@ internal class AdOverlayView @JvmOverloads constructor(
 
             addView(
                 skipButton,
-                LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, dp(40)),
+                LinearLayout.LayoutParams(
+                    LayoutParams.WRAP_CONTENT,
+                    LayoutParams.WRAP_CONTENT,
+                ),
             )
             addView(
                 circularTimerView,
@@ -158,7 +166,10 @@ internal class AdOverlayView @JvmOverloads constructor(
 
             addView(
                 skipInText,
-                LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, dp(40)).apply {
+                LinearLayout.LayoutParams(
+                    LayoutParams.WRAP_CONTENT,
+                    LayoutParams.WRAP_CONTENT,
+                ).apply {
                     marginEnd = dp(6)
                 },
             )
@@ -172,7 +183,7 @@ internal class AdOverlayView @JvmOverloads constructor(
             if (isRtl) {
                 addView(
                     controls,
-                    LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT),
+                    LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT),
                 )
                 addView(remainingText, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             } else {
@@ -180,7 +191,7 @@ internal class AdOverlayView @JvmOverloads constructor(
                 addView(remainingText, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
                 addView(
                     controls,
-                    LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT),
+                    LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT),
                 )
             }
         }
